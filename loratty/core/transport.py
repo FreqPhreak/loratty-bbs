@@ -1,4 +1,5 @@
 import time
+import asyncio
 import serial.tools.list_ports
 from meshtastic.serial_interface import StreamInterface
 from rich.console import Console
@@ -16,6 +17,7 @@ class Transport:
         self.config = config
         self.event_bus = event_bus
         self.interface = None
+        self._loop_task = None
 
     # ---------------------------------------------------------
     # Serial Port Discovery
@@ -26,6 +28,28 @@ class Transport:
         for p in ports:
             console.log(f" - {p}")
         return ports
+
+    # ---------------------------------------------------------
+    # Async Start (called by main.py)
+    # ---------------------------------------------------------
+    async def start(self):
+        console.log("[cyan]Transport.start() called[/]")
+
+        # Auto-select first available port
+        ports = self.list_serial_ports()
+        if not ports:
+            console.log("[red]No serial ports found![/]")
+            return
+
+        port = ports[0]
+        console.log(f"[cyan]Auto-selecting port:[/] {port}")
+
+        # Connect to radio
+        self.connect(port)
+
+        # Start background loop
+        loop = asyncio.get_running_loop()
+        self._loop_task = loop.run_in_executor(None, self.loop_forever)
 
     # ---------------------------------------------------------
     # Connect to Meshtastic Radio
@@ -49,7 +73,6 @@ class Transport:
     def _on_receive(self, packet, interface):
         console.log(f"[yellow]RX Packet:[/] {packet}")
 
-        # Forward to event bus if your app uses one
         if self.event_bus:
             self.event_bus.emit("packet_received", packet)
 

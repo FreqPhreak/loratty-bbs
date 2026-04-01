@@ -1,7 +1,7 @@
 import time
 import asyncio
 import serial.tools.list_ports
-from meshtastic.serial_interface import StreamInterface
+from meshtastic.serial_interface import SerialInterface
 from rich.console import Console
 
 console = Console()
@@ -9,8 +9,8 @@ console = Console()
 
 class Transport:
     """
-    Meshtastic 2.7.x compatible transport layer.
-    Uses StreamInterface and the new callback API.
+    Meshtastic 2.7.x+ compatible transport layer.
+    Uses SerialInterface (StreamInterface is now abstract).
     """
 
     def __init__(self, config=None, event_bus=None):
@@ -54,18 +54,18 @@ class Transport:
     def connect(self, port: str):
         console.log(f"[cyan]Connecting to Meshtastic device on {port}...[/]")
 
-        # Correct constructor for Meshtastic 2.7.x
-        self.interface = StreamInterface(port)
+        # Correct class for your installed Meshtastic version
+        self.interface = SerialInterface(port)
 
         # Register callbacks
         self.interface.onReceive = self._on_receive
         self.interface.onConnection = self._on_connection
         self.interface.onDisconnect = self._on_disconnect
 
-        console.log("[bold green]Connected to Meshtastic radio (2.7.x transport active).[/]")
+        console.log("[bold green]Connected to Meshtastic radio (SerialInterface active).[/]")
 
     # ---------------------------------------------------------
-    # Meshtastic 2.7.x Callback Handlers
+    # Meshtastic Callback Handlers
     # ---------------------------------------------------------
     def _on_receive(self, packet, interface):
         console.log(f"[yellow]RX Packet:[/] {packet}")

@@ -1,0 +1,17 @@
+server:
+  name: "LoRaTTY BBS"
+  motd: "Welcome to LoRaTTY"
+  log_level: "INFO"
+
+radio:
+  serial_port: "auto"
+  baud_rate: 115200
+
+storage:
+  backend: "sqlite"
+  path: "loratty.db"
+
+admin:
+  enable_cli: true
+  enable_web: true
+  web_port: 8080

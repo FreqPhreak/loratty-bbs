@@ -1,4 +1,4 @@
-# Loratty BBS
+# LoRaTTY BBS (In Active Development - Not Ready For Use!)
 
 A modern Bulletin Board System (BBS) implementation built with Python.
 

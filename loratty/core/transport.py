@@ -1,21 +1,18 @@
 import time
 import serial.tools.list_ports
 from meshtastic.serial_interface import StreamInterface
-from meshtastic.util import EventReceiver
 from rich.console import Console
 
 console = Console()
 
 
-class LoRaTTYTransport(EventReceiver):
+class Transport:
     """
-    Meshtastic 2.7.x compatible transport layer for LoRaTTY.
-    Uses StreamInterface instead of the deprecated SerialInterface.
+    Meshtastic 2.7.x compatible transport layer.
+    Uses StreamInterface and the new callback API.
     """
 
     def __init__(self):
-        super().__init__()
-        self.client = None
         self.interface = None
 
     def list_serial_ports(self):
@@ -31,14 +28,25 @@ class LoRaTTYTransport(EventReceiver):
         # StreamInterface is the correct transport for 2.7.x firmware
         self.interface = StreamInterface(devPath=port, noProto=False)
 
-        # Register this class as the event receiver
-        self.interface.addEventReceiver(self)
+        # Register callbacks
+        self.interface.onReceive = self._on_receive
+        self.interface.onConnection = self._on_connection
+        self.interface.onDisconnect = self._on_disconnect
 
         console.log("[bold green]Connected to Meshtastic radio (2.7.x transport active).[/]")
 
-    # Meshtastic 2.7.x event callback
-    def onReceive(self, packet, interface):
+    # --- Meshtastic 2.7.x callback handlers ---
+
+    def _on_receive(self, packet, interface):
         console.log(f"[yellow]RX Packet:[/] {packet}")
+
+    def _on_connection(self, interface):
+        console.log("[green]Meshtastic connection established.[/]")
+
+    def _on_disconnect(self, interface):
+        console.log("[red]Meshtastic disconnected.[/]")
+
+    # --- Sending text ---
 
     def send_text(self, text: str):
         if not self.interface:
@@ -47,6 +55,8 @@ class LoRaTTYTransport(EventReceiver):
 
         console.log(f"[cyan]Sending text:[/] {text}")
         self.interface.sendText(text)
+
+    # --- Event loop ---
 
     def loop_forever(self):
         console.log("[magenta]Starting Meshtastic event loop...[/]")

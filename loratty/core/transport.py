@@ -35,7 +35,6 @@ class Transport:
     async def start(self):
         console.log("[cyan]Transport.start() called[/]")
 
-        # Auto-select first available port
         ports = self.list_serial_ports()
         if not ports:
             console.log("[red]No serial ports found![/]")
@@ -44,10 +43,8 @@ class Transport:
         port = ports[0]
         console.log(f"[cyan]Auto-selecting port:[/] {port}")
 
-        # Connect to radio
         self.connect(port)
 
-        # Start background loop
         loop = asyncio.get_running_loop()
         self._loop_task = loop.run_in_executor(None, self.loop_forever)
 
@@ -57,10 +54,10 @@ class Transport:
     def connect(self, port: str):
         console.log(f"[cyan]Connecting to Meshtastic device on {port}...[/]")
 
-        # StreamInterface is the correct transport for 2.7.x firmware
-        self.interface = StreamInterface(devPath=port, noProto=False)
+        # Correct constructor for Meshtastic 2.7.x
+        self.interface = StreamInterface(port)
 
-        # Register callbacks for Meshtastic 2.7.x
+        # Register callbacks
         self.interface.onReceive = self._on_receive
         self.interface.onConnection = self._on_connection
         self.interface.onDisconnect = self._on_disconnect
@@ -72,7 +69,6 @@ class Transport:
     # ---------------------------------------------------------
     def _on_receive(self, packet, interface):
         console.log(f"[yellow]RX Packet:[/] {packet}")
-
         if self.event_bus:
             self.event_bus.emit("packet_received", packet)
 

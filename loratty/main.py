@@ -1,25 +1,23 @@
 import asyncio
-from loratty.core.config import Config
-from loratty.core.logging import setup_logging
-from loratty.core.events import EventBus
-from loratty.core.transport import Transport
+from transport import SerialTransport
 
 async def main():
-    config = Config()
-    log = setup_logging(config.get("server.log_level"))
+    print("LoRaTTY starting...")
 
-    log.info("Starting LoRaTTY BBS...")
+    transport = SerialTransport()
 
-    event_bus = EventBus()
-    transport = Transport(config, event_bus)
+    def on_packet(pkt):
+        print("RX:", pkt["payload_hex"])
 
-    # Example listener
-    async def on_radio_message(packet):
-        log.info(f"RX: {packet}")
+    transport.subscribe(on_packet)
 
-    event_bus.on("radio.message", on_radio_message)
+    print("Connecting to radio...")
+    await transport.connect()
+    print(f"Connected on {transport.port}")
 
-    await transport.start()
+    # Main loop placeholder
+    while True:
+        await asyncio.sleep(1)
 
 if __name__ == "__main__":
     asyncio.run(main())

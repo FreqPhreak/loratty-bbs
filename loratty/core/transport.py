@@ -1,105 +1,113 @@
-import time
 import asyncio
+import serial
 import serial.tools.list_ports
-from meshtastic.serial_interface import SerialInterface
-from rich.console import Console
-
-console = Console()
 
 
-class Transport:
-    """
-    Transport layer for Meshtastic 2.7.x+ using SerialInterface.
-    Handles connection, callbacks, and background event loop.
-    """
+class SerialTransport:
+    START_BYTE = ord("!")
 
-    def __init__(self, config=None, event_bus=None):
-        self.config = config
-        self.event_bus = event_bus
-        self.interface = None
-        self._loop_task = None
+    def __init__(self, port: str | None = None, baud: int = 115200):
+        self.port = port
+        self.baud = baud
+        self._ser = None
+        self._running = False
+        self._read_task = None
+        self._callbacks = []
 
-    def list_serial_ports(self):
-        """Return available serial ports."""
-        ports = [p.device for p in serial.tools.list_ports.comports()]
-        console.log("[bold green]Available serial ports:[/]")
-        for p in ports:
-            console.log(f" - {p}")
-        return ports
+    def subscribe(self, callback):
+        self._callbacks.append(callback)
 
-    async def start(self):
-        """Async entry point called by main.py."""
-        console.log("[cyan]Transport.start() called[/]")
+    async def connect(self):
+        if self.port is None:
+            self.port = self._auto_detect_port()
+        if self.port is None:
+            raise RuntimeError("No serial device found")
 
-        ports = self.list_serial_ports()
-        if not ports:
-            console.log("[red]No serial ports found![/]")
-            return
+        self._ser = serial.Serial(self.port, self.baud, timeout=0.05)
+        self._running = True
 
-        # Prefer USB/ACM ports (avoid /dev/ttyS0 on Pi)
-        usb_ports = [p for p in ports if "USB" in p or "ACM" in p]
-        port = usb_ports[0] if usb_ports else ports[0]
-
-        console.log(f"[cyan]Auto-selecting port:[/] {port}")
-        self.connect(port)
-
-        # Run the blocking event loop in a background thread
         loop = asyncio.get_running_loop()
-        self._loop_task = loop.run_in_executor(None, self.loop_forever)
+        self._read_task = loop.create_task(self._read_loop())
 
-    def connect(self, port: str):
-        """Connect to the Meshtastic radio and register callbacks."""
-        console.log(f"[cyan]Connecting to Meshtastic device on {port}...[/]")
+    async def disconnect(self):
+        self._running = False
+        if self._read_task:
+            await self._read_task
+        if self._ser and self._ser.is_open:
+            self._ser.close()
 
-        self.interface = SerialInterface(port)
+    async def send_raw_hex(self, payload_hex: str):
+        if not self._ser or not self._ser.is_open:
+            raise RuntimeError("Serial not connected")
 
-        # Correct callback API for your installed Meshtastic version
-        self.interface.onReceive = self._on_receive
-        self.interface.onConnection = self._on_connection
-        self.interface.onDisconnect = self._on_disconnect
+        payload = bytes.fromhex(payload_hex)
+        length = len(payload)
 
-        console.log("[bold green]Connected to Meshtastic radio.[/]")
+        # Meshtastic serial framing: ! <len_lo> <len_hi> <payload>
+        frame = bytearray()
+        frame.append(self.START_BYTE)
+        frame.append(length & 0xFF)
+        frame.append((length >> 8) & 0xFF)
+        frame.extend(payload)
 
-    # --- Callback handlers ----------------------------------------------------
+        self._ser.write(frame)
 
-    def _on_receive(self, packet):
-        """Called when a packet is received."""
-        console.log(f"[yellow]RX Packet:[/] {packet}")
-        if self.event_bus:
-            self.event_bus.emit("packet_received", packet)
+    def _auto_detect_port(self) -> str | None:
+        # Looks for CP210x or common USB/ACM serial device names
+        for p in serial.tools.list_ports.comports():
+            name = p.device.lower()
+            desc = (p.description or "").lower()
 
-    def _on_connection(self):
-        """Called when the radio connects."""
-        console.log("[green]Meshtastic connection established.[/]")
-        if self.event_bus:
-            self.event_bus.emit("connected")
+            if "cp210" in desc:
+                return p.device
+            if "usb" in name or "acm" in name:
+                return p.device
 
-    def _on_disconnect(self):
-        """Called when the radio disconnects."""
-        console.log("[red]Meshtastic disconnected.[/]")
-        if self.event_bus:
-            self.event_bus.emit("disconnected")
+        return None
 
-    # --- Sending --------------------------------------------------------------
+    async def _read_loop(self):
+        buf = bytearray()
 
-    def send_text(self, text: str):
-        """Send a text message over Meshtastic."""
-        if not self.interface:
-            console.log("[red]Cannot send — no interface connected.[/]")
-            return
+        while self._running:
+            try:
+                data = self._ser.read(256)
+            except serial.SerialException:
+                break
 
-        console.log(f"[cyan]Sending text:[/] {text}")
-        self.interface.sendText(text)
+            if data:
+                buf.extend(data)
+                await self._process_buffer(buf)
+            else:
+                await asyncio.sleep(0.01)
 
-    # --- Background event loop ------------------------------------------------
+    async def _process_buffer(self, buf: bytearray):
+        while True:
+            if len(buf) < 3:
+                return
 
-    def loop_forever(self):
-        """Blocking loop required by the Meshtastic client."""
-        console.log("[magenta]Starting Meshtastic event loop...[/]")
-        try:
-            while True:
-                time.sleep(0.1)
-        except KeyboardInterrupt:
-            console.log("[red]Stopping LoRaTTY transport...[/]")
-            if self.interface:
-                self.interface.close()
+            # Sync to start byte
+            if buf[0] != self.START_BYTE:
+                try:
+                    idx = buf.index(self.START_BYTE)
+                    del buf[:idx]
+                except ValueError:
+                    buf.clear()
+                    return
+
+            if len(buf) < 3:
+                return
+
+            length = buf[1] | (buf[2] << 8)
+            if len(buf) < 3 + length:
+                return
+
+            payload = bytes(buf[3:3 + length])
+            del buf[:3 + length]
+
+            packet = {
+                "type": "raw",
+                "payload_hex": payload.hex(),
+            }
+
+            for cb in self._callbacks:
+                cb(packet)

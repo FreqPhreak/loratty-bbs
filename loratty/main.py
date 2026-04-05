@@ -1,5 +1,5 @@
 import asyncio
-from .transport import SerialTransport
+from .core.transport import SerialTransport
 
 async def main():
     print("LoRaTTY starting...")

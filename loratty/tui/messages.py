@@ -5,5 +5,6 @@ class MessagesView:
     def add(self, msg: str):
         self.inbox.append(str(msg))
 
-    def render(self):
-        return "\n".join(self.inbox[-10:])
+    def render(self, height: int):
+        # Return only what fits in the given height
+        return self.inbox[-height:]

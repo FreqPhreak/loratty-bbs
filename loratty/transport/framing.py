@@ -1,8 +1,10 @@
 START = b"\x94"
 END = b"\xc3"
 
+
 def frame_packet(payload: bytes) -> bytes:
     return START + payload + END
+
 
 def deframe(buffer: bytearray):
     packets = []

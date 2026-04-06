@@ -1,32 +1,34 @@
-from loratty.transport.framing import deframe
-from loratty.proto import meshtastic_pb2
+from loratty.transport.framing import deframe, frame_packet
 
 
 class Dispatcher:
     def __init__(self, transport):
         self.transport = transport
         self.buffer = bytearray()
-        self.handlers = {}
+        self.handlers = []
 
+        # Transport pushes raw bytes into _ingest()
         transport.register_callback(self._ingest)
 
-    def register(self, msg_type, handler):
-        self.handlers[msg_type] = handler
+    def register(self, handler):
+        """Register a callback that receives decoded text messages."""
+        self.handlers.append(handler)
 
-    def send(self, msg):
-        payload = msg.SerializeToString()
-        framed = b"\x94" + payload + b"\xc3"
+    def send(self, text: str):
+        """Send a raw text message through the transport."""
+        payload = text.encode("utf-8")
+        framed = frame_packet(payload)
         self.transport.write(framed)
 
-    def _ingest(self, chunk):
+    def _ingest(self, chunk: bytes):
+        """Receive raw bytes, deframe them, decode to text, and dispatch."""
         self.buffer.extend(chunk)
 
         for payload in deframe(self.buffer):
-            msg = meshtastic_pb2.FromRadio()
-            msg.ParseFromString(payload)
+            try:
+                text = payload.decode("utf-8", errors="replace")
+            except Exception:
+                text = "<decode error>"
 
-            key = msg.WhichOneof("payload")
-            handler = self.handlers.get(key)
-
-            if handler:
-                handler(msg)
+            for handler in self.handlers:
+                handler(text)

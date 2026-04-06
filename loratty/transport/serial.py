@@ -1,9 +1,9 @@
 import serial
 import threading
 
+
 class SerialTransport:
     def __init__(self, port, baud):
-        # Adjust port/baud if your hardware differs
         self.ser = serial.Serial(port, baud, timeout=0.1)
 
         self.callbacks = []

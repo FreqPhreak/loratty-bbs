@@ -12,6 +12,7 @@ class Dashboard:
         self.send_callback = fn
 
     def handle_incoming(self, text: str):
+        print("TUI RECEIVED:", text)  # DEBUG
         self.messages.add(text)
         self._refresh()
 
@@ -23,7 +24,6 @@ class Dashboard:
         curses.curs_set(1)
         curses.start_color()
 
-        # Simple aesthetic: status bar + message area + input line
         curses.init_pair(1, curses.COLOR_BLACK, curses.COLOR_CYAN)   # status bar
         curses.init_pair(2, curses.COLOR_GREEN, curses.COLOR_BLACK)  # messages
         curses.init_pair(3, curses.COLOR_YELLOW, curses.COLOR_BLACK) # input label
@@ -34,9 +34,10 @@ class Dashboard:
             try:
                 user_input = self._input_line()
             except KeyboardInterrupt:
-                return  # clean exit
+                return
 
             if user_input.strip():
+                print("TUI SEND:", user_input)  # DEBUG
                 if self.send_callback:
                     self.send_callback(user_input)
 
@@ -47,16 +48,16 @@ class Dashboard:
         self.stdscr.clear()
         max_y, max_x = self.stdscr.getmaxyx()
 
-        # Status bar (top)
+        # Status bar
         status = " LoRaTTY BBS — TC2 style "
-        status = status.ljust(max_x)
         self.stdscr.attron(curses.color_pair(1))
-        self.stdscr.addstr(0, 0, status[:max_x])
+        self.stdscr.addstr(0, 0, status.ljust(max_x))
         self.stdscr.attroff(curses.color_pair(1))
 
-        # Message area (between status and input)
-        msg_height = max_y - 3  # 1 for status, 1 for input label, 1 for input line
+        # Message area
+        msg_height = max_y - 3
         msgs = self.messages.render(msg_height)
+
         self.stdscr.attron(curses.color_pair(2))
         for i, line in enumerate(msgs):
             if i >= msg_height:
@@ -69,7 +70,7 @@ class Dashboard:
         self.stdscr.addstr(max_y - 2, 0, " > ")
         self.stdscr.attroff(curses.color_pair(3))
 
-        # Input line (blank, cursor will move here)
+        # Input line
         self.stdscr.move(max_y - 1, 0)
         self.stdscr.clrtoeol()
 

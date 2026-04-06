@@ -12,6 +12,7 @@ class SerialTransport:
         threading.Thread(target=self._reader, daemon=True).start()
 
     def write(self, data: bytes):
+        print("SERIAL WRITE:", data)  # DEBUG
         self.ser.write(data)
 
     def register_callback(self, fn):
@@ -21,5 +22,6 @@ class SerialTransport:
         while self.running:
             chunk = self.ser.read(256)
             if chunk:
+                print("SERIAL RAW:", chunk)  # DEBUG
                 for cb in self.callbacks:
                     cb(chunk)

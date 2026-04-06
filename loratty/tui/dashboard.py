@@ -1,5 +1,5 @@
 import curses
-from tui.messages import MessagesView
+from loratty.tui.messages import MessagesView
 
 class Dashboard:
     def __init__(self, dispatcher):

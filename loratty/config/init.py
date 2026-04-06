@@ -1,5 +1,5 @@
-from proto import meshtastic_pb2
-from transport.framing import frame_packet
+from loratty.proto import meshtastic_pb2
+from loratty.transport.framing import frame_packet
 
 def initial_config(transport):
     # Adjust these values if you want different defaults

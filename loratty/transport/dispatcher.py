@@ -1,5 +1,5 @@
-from transport.framing import deframe
-from proto import meshtastic_pb2
+from loratty.transport.framing import deframe
+from loratty.proto import meshtastic_pb2
 
 class Dispatcher:
     def __init__(self, transport):
